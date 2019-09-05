@@ -16,7 +16,6 @@ class MyApp extends StatelessWidget {
       home: MultiProvider(
         providers: [
           Provider.value(value: ws),
-          StreamProvider<String>.value(value: ws.conn.stream.cast<String>())
         ],
         child: DirectoryPage("/home/frost"),
       ),
