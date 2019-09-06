@@ -3,8 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:remote_pc/models/file_info_model.dart';
 import 'package:remote_pc/pages/components/file_options.dart';
 import 'package:remote_pc/providers/websocket_provider.dart';
+import 'package:remote_pc/utils.dart';
 
-enum SortFilesBy { NAME, SIZE }
+enum SortFilesBy { NAME, SIZE, DIR }
 
 class DirectoryPage extends StatefulWidget {
   final String _dir;
@@ -20,12 +21,14 @@ class _DirectoryPageState extends State<DirectoryPage> {
   WebSocketProvider _ws;
   String _searchText;
   SortFilesBy _sortFilesBy = SortFilesBy.NAME;
-
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
+  final _inputController = TextEditingController();
   @override
   void initState() {
     _dir = widget._dir;
     _ws = Provider.of<WebSocketProvider>(context, listen: false);
     _ws.listDir(_dir);
+    _inputController.addListener(_onSearchInputChanged);
     super.initState();
   }
 
@@ -45,7 +48,10 @@ class _DirectoryPageState extends State<DirectoryPage> {
                 if (_searchText == null || _searchText.isEmpty) {
                   return true;
                 }
-                return file["name"].toString().contains(_searchText);
+                return file["name"]
+                    .toString()
+                    .toLowerCase()
+                    .contains(_searchText.toLowerCase());
               }).toList();
 
               return WillPopScope(
@@ -56,10 +62,13 @@ class _DirectoryPageState extends State<DirectoryPage> {
 
                   final prevDir = _dirStack.removeLast();
                   _dir = prevDir;
+                  _searchText = "";
+                  _inputController.text = "";
                   _ws.listDir(prevDir);
                   return false;
                 },
                 child: Scaffold(
+                  key: _scaffoldKey,
                   appBar: AppBar(
                     title: Text(_dir),
                     actions: <Widget>[
@@ -91,6 +100,14 @@ class _DirectoryPageState extends State<DirectoryPage> {
                                         ? Colors.blue
                                         : Colors.black)),
                           ),
+                          PopupMenuItem<SortFilesBy>(
+                            value: SortFilesBy.DIR,
+                            child: Text('Sort files by directory',
+                                style: TextStyle(
+                                    color: _sortFilesBy == SortFilesBy.DIR
+                                        ? Colors.blue
+                                        : Colors.black)),
+                          ),
                         ],
                       )
                     ],
@@ -103,7 +120,7 @@ class _DirectoryPageState extends State<DirectoryPage> {
                           vertical: 8.0,
                         ),
                         child: TextField(
-                          onChanged: _onSearchInputChanged,
+                          controller: _inputController,
                           decoration: InputDecoration(hintText: "Search..."),
                         ),
                       ),
@@ -119,26 +136,22 @@ class _DirectoryPageState extends State<DirectoryPage> {
                                   fileInfo.isDir
                                       ? Icons.folder
                                       : Icons.insert_drive_file,
+                                  color:
+                                      fileInfo.isDir ? Colors.blue : Colors.blueGrey,
                                 ),
+                                trailing: Text(fileSizeFormated(fileInfo.size)),
                                 onTap: () async {
                                   if (!fileInfo.isDir) {
+                                    _showFileInfoDialog(fileInfo);
                                     return;
                                   }
                                   _dirStack.add(_dir);
                                   _dir = fileInfo.path;
+                                  _searchText = "";
+                                  _inputController.text = "";
                                   _ws.listDir(_dir);
                                 },
-                                onLongPress: () {
-                                  showDialog(
-                                    context: context,
-                                    builder: (context) {
-                                      return Provider.value(
-                                        value: _ws,
-                                        child: FileOptionsDialog(fileInfo),
-                                      );
-                                    },
-                                  );
-                                },
+                                onLongPress: () => _showFileInfoDialog(fileInfo),
                               );
                             },
                           ).toList(),
@@ -155,9 +168,25 @@ class _DirectoryPageState extends State<DirectoryPage> {
     );
   }
 
-  _onSearchInputChanged(String text) {
+  _showFileInfoDialog(FileInfo fileInfo) async {
+    final shouldUpdate = await showDialog(
+      context: context,
+      builder: (context) {
+        return Provider.value(
+          value: _ws,
+          child: FileOptionsDialog(fileInfo, _scaffoldKey),
+        );
+      },
+    );
+
+    if (shouldUpdate != null && shouldUpdate) {
+      _ws.listDir(_dir);
+    }
+  }
+
+  _onSearchInputChanged() {
     setState(() {
-      _searchText = text;
+      _searchText = _inputController.text;
     });
   }
 
@@ -166,8 +195,15 @@ class _DirectoryPageState extends State<DirectoryPage> {
       switch (sortBy) {
         case SortFilesBy.SIZE:
           return f2["size"].compareTo(f1["size"]);
+        case SortFilesBy.DIR:
+          if (f2["is_dir"]) {
+            return f1["is_dir"] ? 0 : 2;
+          } else {
+            return f2["is_dir"] ? 2 : 0;
+          }
+          break;
         default:
-          return f2["name"].compareTo(f1["name"]);
+          return f1["name"].compareTo(f2["name"]);
       }
     });
     return files;
