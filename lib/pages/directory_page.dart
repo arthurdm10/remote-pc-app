@@ -76,6 +76,10 @@ class _DirectoryPageState extends State<DirectoryPage> {
                         icon: Icon(Icons.file_upload),
                         onPressed: () {},
                       ),
+                      IconButton(
+                        icon: Icon(Icons.photo_size_select_small),
+                        onPressed: () {},
+                      ),
                       PopupMenuButton<SortFilesBy>(
                         onSelected: (SortFilesBy result) {
                           setState(() {
