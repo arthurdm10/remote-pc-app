@@ -101,13 +101,11 @@ class _DirectoryPageState extends State<DirectoryPage>
                               context: context,
                               barrierDismissible: false,
                               builder: (_) {
-                                return Dialog(
-                                  child: Container(
-                                    width: 300,
-                                    height: 350,
-                                    child: Center(
-                                      child: CircularProgressIndicator(),
-                                    ),
+                                return Container(
+                                  width: 300,
+                                  height: 350,
+                                  child: Center(
+                                    child: CircularProgressIndicator(),
                                   ),
                                 );
                               });

@@ -165,40 +165,50 @@ class _ProcessesPageState extends State<ProcessesPage>
                       ),
                     ),
                     Expanded(
-                      child: ListView(
-                        shrinkWrap: true,
-                        primary: true,
-                        padding: const EdgeInsets.symmetric(horizontal: 5),
-                        itemExtent: 20,
-                        children: procs.map((proc) {
-                          return Dismissible(
-                            key: UniqueKey(),
-                            onDismissed: (_) {},
-                            confirmDismiss: (_) {
-                              return Future.delayed(
-                                  Duration(seconds: 2), () => true);
-                            },
-                            dismissThresholds: {DismissDirection.endToStart: 0.2},
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(child: Text(proc["name"])),
-                                Flexible(
-                                  fit: FlexFit.tight,
-                                  child: Text(
-                                    '${proc["cpu_percent"].toStringAsFixed(2)}%',
-                                  ),
+                      child: RefreshIndicator(
+                        onRefresh: () async {
+                          _ws.listProcesses();
+                          return true;
+                        },
+                        child: ListView(
+                          shrinkWrap: true,
+                          primary: true,
+                          padding: const EdgeInsets.symmetric(horizontal: 5),
+                          children: procs.map((proc) {
+                            return InkWell(
+                              onTap: () {
+                                showDialog(
+                                    context: context,
+                                    builder: (_) => ProcessOptions(
+                                        proc["name"], proc["pid"], _ws));
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 3,
+                                  horizontal: 2,
                                 ),
-                                Flexible(
-                                  fit: FlexFit.loose,
-                                  child: Text(
-                                    '${proc["memory_percent"].toStringAsFixed(2)}%',
-                                  ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(child: Text(proc["name"])),
+                                    Flexible(
+                                      fit: FlexFit.tight,
+                                      child: Text(
+                                        '${proc["cpu_percent"].toStringAsFixed(2)}%',
+                                      ),
+                                    ),
+                                    Flexible(
+                                      fit: FlexFit.loose,
+                                      child: Text(
+                                        '${proc["memory_percent"].toStringAsFixed(2)}%',
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          );
-                        }).toList(),
+                              ),
+                            );
+                          }).toList(),
+                        ),
                       ),
                     )
                   ],
@@ -207,6 +217,54 @@ class _ProcessesPageState extends State<ProcessesPage>
             },
           );
         }),
+      ),
+    );
+  }
+}
+
+class ProcessOptions extends StatelessWidget {
+  final String _procName;
+  final int _pid;
+  final WebSocketProvider _ws;
+  const ProcessOptions(this._procName, this._pid, this._ws, {Key key})
+      : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          ListTile(
+            title: Text("Kill process"),
+            onTap: () async {
+              final kill = await showDialog(
+                  context: context,
+                  builder: (_) {
+                    return AlertDialog(
+                      title: Text('Kill process "$_procName" (PID: $_pid)'),
+                      content: Text('Are you sure ?'),
+                      actions: <Widget>[
+                        FlatButton(
+                          child: Text("YES"),
+                          onPressed: () {
+                            Navigator.of(context).pop(true);
+                          },
+                        )
+                      ],
+                    );
+                  });
+              if (kill != null && kill) {
+                _ws.killProcess(_pid, (response) {
+                  if (response["response"] != null) {
+                    Navigator.of(context).pop();
+                  }
+                });
+              }
+            },
+          ),
+        ],
       ),
     );
   }

@@ -15,6 +15,7 @@ class WebSocketProvider {
     "rename_file": CmdResponse("rename_file"),
     "download_file": CmdResponse("download_file"),
     "ls_ps": CmdResponse("ls_ps"),
+    "kill_ps": CmdResponse("kill_ps"),
   };
 
   WebSocketProvider(String remoteServer, int port, String pcKey) {
@@ -30,7 +31,7 @@ class WebSocketProvider {
     conn.stream.listen((data) {
       if (data is String) {
         final Map jsonData = jsonDecode(data);
-        print('receiveid text msg: $jsonData');
+        // print('receiveid text msg: $jsonData');
         if (jsonData.containsKey("cmd_response")) {
           final String cmd = jsonData["cmd_response"];
           _cmdResponse[cmd].setData(jsonData);
@@ -123,7 +124,7 @@ class WebSocketProvider {
       if (data is Map) {
         if (data.containsKey("size")) {
           fileSize = data["size"];
-          print('File size $fileSize');
+          // print('File size $fileSize');
         } else {
           // TODO: VERIFY HASH
 
@@ -149,6 +150,19 @@ class WebSocketProvider {
   }
 
   listProcesses() => _sendCmdRequest("ls_ps", []);
+
+  killProcess(int pid, Function callback) {
+    final cmdResponse = _cmdResponse["kill_ps"];
+    Function onDone;
+
+    onDone = () {
+      callback(cmdResponse.data);
+      cmdResponse.removeListener(onDone);
+    };
+
+    cmdResponse.addListener(onDone);
+    _sendCmdRequest("kill_ps", [pid]);
+  }
 
   cancelStream() {
     final Map request = {
