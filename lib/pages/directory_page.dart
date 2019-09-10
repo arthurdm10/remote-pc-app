@@ -1,4 +1,8 @@
+import 'dart:io';
+
+import 'package:downloads_path_provider/downloads_path_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:open_file/open_file.dart';
 import 'package:provider/provider.dart';
 import 'package:remote_pc/models/file_info_model.dart';
 import 'package:remote_pc/pages/components/file_options.dart';
@@ -15,7 +19,8 @@ class DirectoryPage extends StatefulWidget {
   _DirectoryPageState createState() => _DirectoryPageState();
 }
 
-class _DirectoryPageState extends State<DirectoryPage> {
+class _DirectoryPageState extends State<DirectoryPage>
+    with AutomaticKeepAliveClientMixin {
   String _dir;
   List _dirStack = List<String>();
   WebSocketProvider _ws;
@@ -23,6 +28,10 @@ class _DirectoryPageState extends State<DirectoryPage> {
   SortFilesBy _sortFilesBy = SortFilesBy.NAME;
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _inputController = TextEditingController();
+
+  @override
+  bool get wantKeepAlive => true;
+
   @override
   void initState() {
     _dir = widget._dir;
@@ -34,6 +43,8 @@ class _DirectoryPageState extends State<DirectoryPage> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
+
     return ChangeNotifierProvider(
       builder: (_) => _ws.getCmdResponse("ls_dir"),
       child: Builder(
@@ -44,7 +55,7 @@ class _DirectoryPageState extends State<DirectoryPage> {
                 return Center(child: CircularProgressIndicator());
               }
 
-              final files = cmdResponse.data["data"].where((file) {
+              final files = cmdResponse.data["response"].where((file) {
                 if (_searchText == null || _searchText.isEmpty) {
                   return true;
                 }
@@ -78,7 +89,65 @@ class _DirectoryPageState extends State<DirectoryPage> {
                       ),
                       IconButton(
                         icon: Icon(Icons.photo_size_select_small),
-                        onPressed: () {},
+                        tooltip: "Take a screenshot",
+                        onPressed: () async {
+                          final downloadsPath =
+                              await DownloadsPathProvider.downloadsDirectory;
+                          final fileName = '${downloadsPath.path}/screenshot.jpeg';
+                          final file = File(fileName);
+                          final ioFile = file.openWrite();
+
+                          showDialog(
+                              context: context,
+                              barrierDismissible: false,
+                              builder: (_) {
+                                return Dialog(
+                                  child: Container(
+                                    width: 300,
+                                    height: 350,
+                                    child: Center(
+                                      child: CircularProgressIndicator(),
+                                    ),
+                                  ),
+                                );
+                              });
+                          _ws.downloadFile(
+                            "",
+                            ioFile,
+                            (int totalReceived) {
+                              print(totalReceived);
+                            },
+                            (canceled) async {
+                              await ioFile.flush();
+                              await ioFile.close();
+                              Navigator.of(context).pop();
+
+                              if (!canceled) {
+                                final result = await OpenFile.open(fileName);
+                                if (result != "done") {
+                                  _scaffoldKey.currentState.showSnackBar(SnackBar(
+                                    content: Text(result),
+                                  ));
+                                }
+                              } else {
+                                final msg = canceled
+                                    ? "Download canceled!"
+                                    : "Download completed!";
+                                _scaffoldKey.currentState.showSnackBar(SnackBar(
+                                  content: Text(msg),
+                                  duration: Duration(seconds: 2),
+                                ));
+
+                                if (canceled) {
+                                  print(
+                                      "Download canceled by user... Deleting file");
+                                  file.deleteSync();
+                                }
+                              }
+                            },
+                            screenshot: true,
+                          );
+                        },
                       ),
                       PopupMenuButton<SortFilesBy>(
                         onSelected: (SortFilesBy result) {

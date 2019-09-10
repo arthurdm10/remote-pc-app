@@ -13,7 +13,8 @@ class WebSocketProvider {
     "create_file": CmdResponse("create_file"),
     "delete_file": CmdResponse("delete_file"),
     "rename_file": CmdResponse("rename_file"),
-    "upload_file": CmdResponse("download_file"),
+    "download_file": CmdResponse("download_file"),
+    "ls_ps": CmdResponse("ls_ps"),
   };
 
   WebSocketProvider(String remoteServer, int port, String pcKey) {
@@ -35,8 +36,7 @@ class WebSocketProvider {
           _cmdResponse[cmd].setData(jsonData);
         }
       } else if (data is List<int>) {
-        // download_file is the only command that receives binary data
-        _cmdResponse["upload_file"].setData(data);
+        _cmdResponse["download_file"].setData(data);
       }
     });
   }
@@ -45,7 +45,7 @@ class WebSocketProvider {
     return _cmdResponse[cmd];
   }
 
-  _sendCmdRequest(String cmd, List<String> args, {bool isStream: false}) {
+  _sendCmdRequest(String cmd, List args, {bool isStream: false}) {
     final cmdResponse = _cmdResponse[cmd];
     cmdResponse.status = CmdResponseStatus.LOADING;
     final Map request = {
@@ -103,10 +103,16 @@ class WebSocketProvider {
   /// Download [filePath] from remote PC
   ///
   /// File will be saved on [localFilePath]
-  /// [onProgress] is called when data is received
-  downloadFile(String filePath, Sink<List<int>> streamSink, Function onProgress,
-      Function onDone) async {
-    final cmdResponse = _cmdResponse["upload_file"];
+  ///
+  /// [onProgress] is called when a chunk of data is received
+  downloadFile(
+    String filePath,
+    Sink<List<int>> streamSink,
+    Function onProgress,
+    Function onDone, {
+    bool screenshot = false,
+  }) async {
+    final cmdResponse = _cmdResponse["download_file"];
     VoidCallback onData;
 
     int fileSize = 0;
@@ -135,8 +141,14 @@ class WebSocketProvider {
     };
 
     cmdResponse.addListener(onData);
-    _sendCmdRequest("upload_file", [filePath], isStream: true);
+    _sendCmdRequest(
+      "download_file",
+      [filePath, screenshot],
+      isStream: true,
+    );
   }
+
+  listProcesses() => _sendCmdRequest("ls_ps", []);
 
   cancelStream() {
     final Map request = {
@@ -166,11 +178,3 @@ class CmdResponse<T> extends ChangeNotifier {
     }
   }
 }
-
-// class FileDownloadResponse extends CmdResponse<List<int>> {
-
-//   FileDownloadResponse(): super("download_file");
-
-//   appendData()
-
-// }

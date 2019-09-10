@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:downloads_path_provider/downloads_path_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:open_file/open_file.dart';
 import 'package:provider/provider.dart';
@@ -66,13 +67,14 @@ class FileOptionsDialog extends StatelessWidget {
                   });
               if (delete) {
                 ws.deleteFile(_fileInfo.path, (response) {
-                  if (response["success"]) {
-                    _scaffoldKey.currentState.showSnackBar(SnackBar(
-                      content: Text("File deleted!"),
-                      duration: Duration(seconds: 2),
-                    ));
-                    Navigator.of(context).pop(true);
-                  }
+                  var msg =
+                      response["response"] ? "File deleted" : response["error"];
+
+                  _scaffoldKey.currentState.showSnackBar(SnackBar(
+                    content: Text(msg),
+                    duration: Duration(seconds: 2),
+                  ));
+                  Navigator.of(context).pop(true);
                 });
               }
             },
@@ -107,7 +109,7 @@ class FileOptionsDialog extends StatelessWidget {
                   ws.renameFile(_fileInfo.path,
                       _fileInfo.path.replaceFirst(_fileInfo.name, newName),
                       (response) {
-                    if (response["success"]) {
+                    if (response["response"]) {
                       Navigator.of(context).pop(true);
                     } else {
                       _scaffoldKey.currentState.showSnackBar(SnackBar(
@@ -133,10 +135,11 @@ class FileOptionsDialog extends StatelessWidget {
   }
 
   void _downloadFile(WebSocketProvider ws, BuildContext context,
-      [bool open = false]) {
+      [bool open = false]) async {
     ValueNotifier<double> valueNotifier = ValueNotifier<double>(0.0);
-    final appPath = "/data/user_de/0/com.example.remote_pc/cache";
-    final fileName = '${appPath.toString()}/${_fileInfo.name}';
+    final downloadsPath = await DownloadsPathProvider.downloadsDirectory;
+    final fileName = '${downloadsPath.path}/${_fileInfo.name}';
+
     final file = File(fileName);
     final ioFile = file.openWrite();
 
@@ -173,10 +176,16 @@ class FileOptionsDialog extends StatelessWidget {
           _scaffoldKey.currentState.showSnackBar(SnackBar(
             content: Text(msg),
             duration: Duration(seconds: 2),
+            action: SnackBarAction(
+              label: "Open",
+              onPressed: () async {
+                await OpenFile.open(fileName);
+              },
+            ),
           ));
 
           if (canceled) {
-            print("Download canceld by user... Deleting file");
+            print("Download canceled by user... Deleting file");
             file.deleteSync();
           }
         }
