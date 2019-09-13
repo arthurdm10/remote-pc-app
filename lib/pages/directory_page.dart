@@ -55,6 +55,32 @@ class _DirectoryPageState extends State<DirectoryPage>
                 return Center(child: CircularProgressIndicator());
               }
 
+              if (cmdResponse.error()) {
+                if (cmdResponse.errorData.code == 0x0A) {
+                  if (_dirStack.isNotEmpty) {
+                    _dir = _dirStack.removeLast();
+                  }
+                  Future.delayed(
+                    Duration(milliseconds: 200),
+                    () => showDialog(
+                      context: context,
+                      builder: (context) {
+                        return AlertDialog(
+                          title: Text("Error"),
+                          content: Text(cmdResponse.errorData.msg),
+                        );
+                      },
+                    ),
+                  );
+                }
+              }
+              final cmdData = cmdResponse.data;
+
+              if (cmdData == null || !cmdData.containsKey("response")) {
+                print("No data was received");
+                return Container(child: Center(child: Text("Error")));
+              }
+
               final files = cmdResponse.data["response"].where((file) {
                 if (_searchText == null || _searchText.isEmpty) {
                   return true;

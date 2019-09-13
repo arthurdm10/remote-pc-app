@@ -66,9 +66,14 @@ class FileOptionsDialog extends StatelessWidget {
                     );
                   });
               if (delete) {
-                ws.deleteFile(_fileInfo.path, (response) {
-                  var msg =
-                      response["response"] ? "File deleted" : response["error"];
+                ws.deleteFile(_fileInfo.path, (response, error) {
+                  String msg;
+
+                  if (error) {
+                    msg = response.msg;
+                  } else {
+                    msg = response["response"];
+                  }
 
                   _scaffoldKey.currentState.showSnackBar(SnackBar(
                     content: Text(msg),
@@ -159,7 +164,7 @@ class FileOptionsDialog extends StatelessWidget {
       (int totalReceived) {
         valueNotifier.value = totalReceived.toDouble();
       },
-      (canceled) async {
+      (bool canceled, CommandError error) async {
         await ioFile.flush();
         await ioFile.close();
         Navigator.of(context).pop();
@@ -172,16 +177,24 @@ class FileOptionsDialog extends StatelessWidget {
             ));
           }
         } else {
-          final msg = canceled ? "Download canceled!" : "Download completed!";
+          String msg;
+
+          if (error == null) {
+            msg = canceled ? "Download canceled!" : "Download completed!";
+          } else {
+            msg = 'Error: ${error.msg}';
+          }
           _scaffoldKey.currentState.showSnackBar(SnackBar(
             content: Text(msg),
             duration: Duration(seconds: 2),
-            action: SnackBarAction(
-              label: "Open",
-              onPressed: () async {
-                await OpenFile.open(fileName);
-              },
-            ),
+            action: canceled || error != null
+                ? null
+                : SnackBarAction(
+                    label: "Open",
+                    onPressed: () async {
+                      await OpenFile.open(fileName);
+                    },
+                  ),
           ));
 
           if (canceled) {

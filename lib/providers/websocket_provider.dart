@@ -1,10 +1,12 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-import 'package:crypto/crypto.dart';
+class CmdErrorCode {
+  static const PermissionDenied = 0x0A;
+  static const InvalidArguments = 0x0B;
+}
 
 class WebSocketProvider {
   WebSocketChannel conn;
@@ -18,15 +20,20 @@ class WebSocketProvider {
     "kill_ps": CmdResponse("kill_ps"),
   };
 
-  WebSocketProvider(String remoteServer, int port, String pcKey) {
-    final url = Uri(
+  WebSocketProvider(String connectionUrl, int port, String pcKey) {
+    connectionUrl = Uri(
       scheme: "ws",
-      host: remoteServer,
+      // host: "192.168.0.110",
+      host: "10.0.3.2",
       port: port,
       path: '/access/$pcKey',
     ).toString();
-
-    conn = IOWebSocketChannel.connect(url);
+    // print(connectionUrl);
+    conn = IOWebSocketChannel.connect(
+      connectionUrl,
+      headers: {"X-username": "user1234", "X-password": "password123"},
+      pingInterval: Duration(seconds: 10),
+    );
 
     conn.stream.listen((data) {
       if (data is String) {
@@ -39,6 +46,8 @@ class WebSocketProvider {
       } else if (data is List<int>) {
         _cmdResponse["download_file"].setData(data);
       }
+    }).onError((err) {
+      print("Websocket err: ${err.inner}");
     });
   }
 
@@ -81,7 +90,8 @@ class WebSocketProvider {
     final cmdResponse = _cmdResponse["delete_file"];
     VoidCallback onDone;
     onDone = () {
-      callback(cmdResponse.data);
+      final data = cmdResponse.error() ? cmdResponse.errorData : cmdResponse.data;
+      callback(data, cmdResponse.error());
       cmdResponse.removeListener(onDone);
     };
 
@@ -93,7 +103,8 @@ class WebSocketProvider {
     final cmdResponse = _cmdResponse["rename_file"];
     VoidCallback onDone;
     onDone = () {
-      callback(cmdResponse.data);
+      final data = cmdResponse.error() ? cmdResponse.errorData : cmdResponse.data;
+      callback(data, cmdResponse.error());
       cmdResponse.removeListener(onDone);
     };
 
@@ -116,14 +127,18 @@ class WebSocketProvider {
     final cmdResponse = _cmdResponse["download_file"];
     VoidCallback onData;
 
-    int fileSize = 0;
     int totalReceived = 0;
 
     onData = () async {
+      if (cmdResponse.error()) {
+        cmdResponse.removeListener(onData);
+        onDone(true, cmdResponse.errorData);
+        return;
+      }
+
       final data = cmdResponse.data;
       if (data is Map) {
         if (data.containsKey("size")) {
-          fileSize = data["size"];
           // print('File size $fileSize');
         } else {
           // TODO: VERIFY HASH
@@ -132,7 +147,7 @@ class WebSocketProvider {
           final canceled = data.containsKey("canceled");
 
           cmdResponse.removeListener(onData);
-          onDone(canceled);
+          onDone(canceled, null);
         }
       } else {
         streamSink.add(data);
@@ -144,7 +159,7 @@ class WebSocketProvider {
     cmdResponse.addListener(onData);
     _sendCmdRequest(
       "download_file",
-      [filePath, screenshot],
+      [filePath],
       isStream: true,
     );
   }
@@ -172,11 +187,16 @@ class WebSocketProvider {
   }
 }
 
-enum CmdResponseStatus { LOADING, DONE, UNINTIALIZED }
+enum CmdResponseStatus { LOADING, DONE, ERROR, UNINTIALIZED }
 
 class CmdResponse<T> extends ChangeNotifier {
   T _data;
   T get data => _data;
+
+  CommandError _error;
+  CommandError get errorData => _error;
+
+  bool error() => status == CmdResponseStatus.ERROR;
 
   CmdResponseStatus status = CmdResponseStatus.UNINTIALIZED;
   String cmd;
@@ -184,11 +204,30 @@ class CmdResponse<T> extends ChangeNotifier {
   CmdResponse(this.cmd);
 
   setData(T data, [bool notify = true]) {
+    if (data is Map) {
+      if (data.containsKey("error_msg") && data.containsKey("error_code")) {
+        _error = CommandError.fromJson(data);
+        status = CmdResponseStatus.ERROR;
+        notifyListeners();
+        return;
+      }
+    }
     _data = data;
     status = CmdResponseStatus.DONE;
 
     if (notify) {
       notifyListeners();
     }
+  }
+}
+
+class CommandError {
+  final int code;
+  final String msg;
+  final String command;
+  CommandError(this.command, this.code, this.msg);
+
+  factory CommandError.fromJson(Map json) {
+    return CommandError(json["cmd_response"], json["error_code"], json["error_msg"]);
   }
 }
