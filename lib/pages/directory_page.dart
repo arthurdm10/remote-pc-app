@@ -95,7 +95,7 @@ class _DirectoryPageState extends State<DirectoryPage>
               return WillPopScope(
                 onWillPop: () async {
                   if (_dirStack.isEmpty) {
-                    _ws.dispose();
+                    _ws.closeConnection();
                     Navigator.of(context).pushReplacement(
                         MaterialPageRoute(builder: (_) => ConnectPage()));
                   }

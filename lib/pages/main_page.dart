@@ -17,11 +17,14 @@ class MainPage extends StatefulWidget {
 
 class _MainPageState extends State<MainPage> {
   WebSocketProvider ws;
+
   VoidCallback connectionListener;
 
   @override
   void initState() {
     ws = widget._ws;
+    ws.requestInitialDir();
+
     connectionListener = () {
       if (ws.connectionStatus == WsConnectionStatus.closed) {
         ws.removeListener(connectionListener);
@@ -46,13 +49,19 @@ class _MainPageState extends State<MainPage> {
 
   @override
   Widget build(BuildContext context) {
+    final initialDirResponse = Provider.of<CmdResponse>(context);
+
+    if (initialDirResponse.status == CmdResponseStatus.LOADING) {
+      return Center(child: CircularProgressIndicator());
+    }
+
     return MaterialApp(
       title: 'Remote PC',
       home: ChangeNotifierProvider.value(
         value: ws,
         child: PageView(
           children: <Widget>[
-            DirectoryPage("/home/frost"),
+            DirectoryPage(initialDirResponse.data["response"]),
             ProcessesPage(),
           ],
         ),

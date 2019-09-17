@@ -13,29 +13,25 @@ enum WsConnectionStatus { unintialized, connecting, connected, error, closed }
 
 class WebSocketProvider extends ChangeNotifier {
   WebSocketChannel conn;
+
+  String initialDir;
+
   WsConnectionStatus _connectionStatus = WsConnectionStatus.unintialized;
   WsConnectionStatus get connectionStatus => _connectionStatus;
 
   final Map<String, CmdResponse> _cmdResponse = {
-    "ls_dir": CmdResponse("ls_dir"),
-    "create_file": CmdResponse("create_file"),
-    "delete_file": CmdResponse("delete_file"),
-    "rename_file": CmdResponse("rename_file"),
-    "download_file": CmdResponse("download_file"),
-    "ls_ps": CmdResponse("ls_ps"),
-    "kill_ps": CmdResponse("kill_ps"),
-    "create_dir": CmdResponse("create_dir"),
+    "initial_dir": CmdResponse(),
+    "ls_dir": CmdResponse(),
+    "create_file": CmdResponse(),
+    "delete_file": CmdResponse(),
+    "rename_file": CmdResponse(),
+    "download_file": CmdResponse(),
+    "ls_ps": CmdResponse(),
+    "kill_ps": CmdResponse(),
+    "create_dir": CmdResponse(),
   };
 
   WebSocketProvider(Map conncectionData) {
-    // connectionUrl = Uri(
-    //   scheme: "ws",
-    //   host: "192.168.0.110",
-    //   // host: "10.0.3.2",
-    //   port: port,
-    //   path: '/access/$pcKey',
-    // ).toString();
-    // // print(connectionUrl);
     _connectionStatus = WsConnectionStatus.connecting;
     WebSocket.connect(
       'ws://${conncectionData["remote_server"]}/access/${conncectionData["key"]}',
@@ -44,9 +40,11 @@ class WebSocketProvider extends ChangeNotifier {
         "X-password": conncectionData["password"]
       },
     ).then((ws) {
-      _connectionStatus = WsConnectionStatus.connected;
-      notifyListeners();
       ws.pingInterval = Duration(seconds: 2);
+      _connectionStatus = WsConnectionStatus.connected;
+
+      notifyListeners();
+
       conn = IOWebSocketChannel(ws);
 
       conn.stream.listen((data) {
@@ -65,8 +63,10 @@ class WebSocketProvider extends ChangeNotifier {
         _connectionStatus = WsConnectionStatus.error;
         notifyListeners();
       }, onDone: () {
-        _connectionStatus = WsConnectionStatus.closed;
-        notifyListeners();
+        if (_connectionStatus != WsConnectionStatus.unintialized) {
+          _connectionStatus = WsConnectionStatus.closed;
+          notifyListeners();
+        }
       });
     }).catchError((err) {
       _connectionStatus = WsConnectionStatus.error;
@@ -74,10 +74,9 @@ class WebSocketProvider extends ChangeNotifier {
     });
   }
 
-  dispose() async {
+  closeConnection() async {
     await conn.sink.close();
     _connectionStatus = WsConnectionStatus.unintialized;
-    super.dispose();
   }
 
   CmdResponse getCmdResponse(String cmd) {
@@ -94,6 +93,10 @@ class WebSocketProvider extends ChangeNotifier {
       "stream": isStream
     };
     conn.sink.add(jsonEncode(request));
+  }
+
+  requestInitialDir() {
+    _sendCmdRequest("initial_dir", []);
   }
 
   listDir(String dirPath) {
@@ -240,9 +243,6 @@ class CmdResponse<T> extends ChangeNotifier {
   bool error() => status == CmdResponseStatus.ERROR;
 
   CmdResponseStatus status = CmdResponseStatus.UNINTIALIZED;
-  String cmd;
-
-  CmdResponse(this.cmd);
 
   setData(T data, [bool notify = true]) {
     if (data is Map) {

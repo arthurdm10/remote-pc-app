@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:qrcode_reader/qrcode_reader.dart';
 import 'package:remote_pc/providers/websocket_provider.dart';
 
@@ -40,6 +41,7 @@ class ConnectPage extends StatelessWidget {
 
                 if (connectionData != null) {
                   final ws = WebSocketProvider(connectionData);
+
                   final connected = await showDialog(
                     context: context,
                     barrierDismissible: false,
@@ -48,18 +50,23 @@ class ConnectPage extends StatelessWidget {
                       connect = () {
                         if (ws.connectionStatus == WsConnectionStatus.connected) {
                           //close loading dialog
+                          ws.removeListener(connect);
                           Navigator.of(context).pop(true);
-
                           Navigator.of(context).pushReplacement(
                             MaterialPageRoute(
-                              builder: (_) => MainPage(ws),
+                              builder: (_) => ChangeNotifierProvider(
+                                builder: (_) => ws.getCmdResponse("initial_dir"),
+                                child: MainPage(ws),
+                              ),
                             ),
                           );
                         } else if (ws.connectionStatus == WsConnectionStatus.error) {
                           Navigator.of(context).pop(false);
                         }
                       };
+
                       ws.addListener(connect);
+
                       return Container(
                         width: 300,
                         height: 350,
