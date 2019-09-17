@@ -56,23 +56,22 @@ class _DirectoryPageState extends State<DirectoryPage>
               }
 
               if (cmdResponse.error()) {
-                if (cmdResponse.errorData.code == 0x0A) {
-                  if (_dirStack.isNotEmpty) {
-                    _dir = _dirStack.removeLast();
-                  }
-                  Future.delayed(
-                    Duration(milliseconds: 200),
-                    () => showDialog(
-                      context: context,
-                      builder: (context) {
-                        return AlertDialog(
-                          title: Text("Error"),
-                          content: Text(cmdResponse.errorData.msg),
-                        );
-                      },
-                    ),
-                  );
+                cmdResponse.status = CmdResponseStatus.DONE;
+                if (_dirStack.isNotEmpty) {
+                  _dir = _dirStack.removeLast();
                 }
+                Future.delayed(
+                  Duration(milliseconds: 200),
+                  () => showDialog(
+                    context: context,
+                    builder: (context) {
+                      return AlertDialog(
+                        title: Text("Error"),
+                        content: Text(cmdResponse.errorData.msg),
+                      );
+                    },
+                  ),
+                );
               }
               final cmdData = cmdResponse.data;
 
@@ -110,10 +109,6 @@ class _DirectoryPageState extends State<DirectoryPage>
                     title: Text(_dir),
                     actions: <Widget>[
                       IconButton(
-                        icon: Icon(Icons.file_upload),
-                        onPressed: () {},
-                      ),
-                      IconButton(
                         icon: Icon(Icons.photo_size_select_small),
                         tooltip: "Take a screenshot",
                         onPressed: () async {
@@ -126,7 +121,36 @@ class _DirectoryPageState extends State<DirectoryPage>
                           showDialog(
                               context: context,
                               barrierDismissible: false,
-                              builder: (_) {
+                              builder: (context) {
+                                _ws.takeScreenshot(ioFile, (canceled, error) async {
+                                  await ioFile.flush();
+                                  await ioFile.close();
+                                  Navigator.of(context).pop();
+
+                                  if (!canceled) {
+                                    final result = await OpenFile.open(fileName);
+                                    if (result != "done") {
+                                      _scaffoldKey.currentState
+                                          .showSnackBar(SnackBar(
+                                        content: Text(result),
+                                      ));
+                                    }
+                                  } else {
+                                    final msg = canceled
+                                        ? "Download canceled!"
+                                        : "Download completed!";
+                                    _scaffoldKey.currentState.showSnackBar(SnackBar(
+                                      content: Text(msg),
+                                      duration: Duration(seconds: 2),
+                                    ));
+
+                                    if (canceled) {
+                                      print(
+                                          "Download canceled by user... Deleting file");
+                                      file.deleteSync();
+                                    }
+                                  }
+                                });
                                 return Container(
                                   width: 300,
                                   height: 350,
@@ -135,42 +159,6 @@ class _DirectoryPageState extends State<DirectoryPage>
                                   ),
                                 );
                               });
-                          _ws.downloadFile(
-                            "",
-                            ioFile,
-                            (int totalReceived) {
-                              print(totalReceived);
-                            },
-                            (canceled) async {
-                              await ioFile.flush();
-                              await ioFile.close();
-                              Navigator.of(context).pop();
-
-                              if (!canceled) {
-                                final result = await OpenFile.open(fileName);
-                                if (result != "done") {
-                                  _scaffoldKey.currentState.showSnackBar(SnackBar(
-                                    content: Text(result),
-                                  ));
-                                }
-                              } else {
-                                final msg = canceled
-                                    ? "Download canceled!"
-                                    : "Download completed!";
-                                _scaffoldKey.currentState.showSnackBar(SnackBar(
-                                  content: Text(msg),
-                                  duration: Duration(seconds: 2),
-                                ));
-
-                                if (canceled) {
-                                  print(
-                                      "Download canceled by user... Deleting file");
-                                  file.deleteSync();
-                                }
-                              }
-                            },
-                            screenshot: true,
-                          );
                         },
                       ),
                       PopupMenuButton<SortFilesBy>(
@@ -209,6 +197,75 @@ class _DirectoryPageState extends State<DirectoryPage>
                       )
                     ],
                   ),
+                  bottomNavigationBar: BottomAppBar(
+                    child: SizedBox(
+                      height: 40,
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: <Widget>[
+                          IconButton(
+                            icon: Icon(Icons.create_new_folder, color: Colors.blue),
+                            tooltip: "Create new directory",
+                            onPressed: () async {
+                              final String dirName = await showDialog(
+                                context: context,
+                                builder: (context) {
+                                  final textController = TextEditingController();
+                                  return AlertDialog(
+                                    title: Text("Create directory"),
+                                    content: TextField(
+                                      controller: textController,
+                                    ),
+                                    actions: <Widget>[
+                                      FlatButton(
+                                        child: Text("Create"),
+                                        onPressed: () {
+                                          final dirName = textController.text.trim();
+
+                                          if (dirName.isEmpty ||
+                                              dirName == "." ||
+                                              dirName == ".." ||
+                                              dirName.contains("../")) {
+                                            //todo
+                                          } else {
+                                            Navigator.of(context).pop(dirName);
+                                          }
+                                        },
+                                      )
+                                    ],
+                                  );
+                                },
+                              );
+
+                              if (dirName != null && dirName.isNotEmpty) {
+                                final cmdResponse = _ws.getCmdResponse("create_dir");
+                                final dirPath = _dir + '/$dirName';
+                                VoidCallback onResponse;
+                                onResponse = () {
+                                  _scaffoldKey.currentState.showSnackBar(
+                                    SnackBar(
+                                      content: Text(cmdResponse.error()
+                                          ? cmdResponse.errorData.msg
+                                          : "Directory created!"),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                  cmdResponse.removeListener(onResponse);
+                                };
+                                cmdResponse.addListener(onResponse);
+                                _ws.createDirectory(dirPath);
+                              }
+                            },
+                          ),
+                          IconButton(
+                            icon: Icon(Icons.file_upload, color: Colors.blue),
+                            tooltip: "Upload a file",
+                            onPressed: () {},
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                   body: Column(
                     children: <Widget>[
                       Padding(
@@ -242,10 +299,10 @@ class _DirectoryPageState extends State<DirectoryPage>
                                     _showFileInfoDialog(fileInfo);
                                     return;
                                   }
-                                  _dirStack.add(_dir);
-                                  _dir = fileInfo.path;
                                   _searchText = "";
                                   _inputController.text = "";
+                                  _dirStack.add(_dir);
+                                  _dir = fileInfo.path;
                                   _ws.listDir(_dir);
                                 },
                                 onLongPress: () => _showFileInfoDialog(fileInfo),
@@ -293,6 +350,7 @@ class _DirectoryPageState extends State<DirectoryPage>
         case SortFilesBy.SIZE:
           return f2["size"].compareTo(f1["size"]);
         case SortFilesBy.DIR:
+          // ??????
           if (f2["is_dir"]) {
             return f1["is_dir"] ? 0 : 2;
           } else {

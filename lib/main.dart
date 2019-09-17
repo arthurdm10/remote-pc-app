@@ -7,7 +7,7 @@ import 'package:remote_pc/pages/directory_page.dart';
 import 'package:remote_pc/pages/processes_page.dart';
 import 'package:remote_pc/providers/websocket_provider.dart';
 
-void main() => runApp(MainPage({}));
+void main() => runApp(ConnectPage());
 
 class MainPage extends StatefulWidget {
   final Map connectionData;
@@ -19,13 +19,14 @@ class MainPage extends StatefulWidget {
 }
 
 class _MainPageState extends State<MainPage> {
-  final pcKey = "fc58161e6b0da8e0cae8248f40141165";
+  // final pcKey = "key123";
 
   WebSocketProvider ws;
 
   @override
   void initState() {
-    ws = WebSocketProvider(widget.connectionData["remote_server"], 9002, pcKey);
+    ws = WebSocketProvider(
+        widget.connectionData["remote_server"], widget.connectionData["key"]);
     // final ws = WebSocketProvider("192.168.0.110", 9002, pcKey);
     super.initState();
   }
@@ -40,7 +41,7 @@ class _MainPageState extends State<MainPage> {
         ],
         child: PageView(
           children: <Widget>[
-            DirectoryPage("/home/frost"),
+            DirectoryPage("/home/frost/"),
             ProcessesPage(),
           ],
         ),
@@ -69,8 +70,24 @@ class ConnectPage extends StatelessWidget {
                   .setHandlePermissions(true) // default true
                   .setExecuteAfterPermissionGranted(true) // default true
                   .scan();
+
               Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (_) => MainPage(jsonDecode(codeData))));
+                MaterialPageRoute(
+                  builder: (_) => MainPage(
+                    jsonDecode(codeData),
+                  ),
+                ),
+              );
+
+              // Navigator.of(context).pushReplacement(
+              //   MaterialPageRoute(
+              //     builder: (_) => MainPage(
+              //       jsonDecode(
+              //           '{"remote_server": "10.0.3.2:9002", "key": "key123"}'),
+              //     ),
+              //   ),
+              // );
+              // return;
             },
             child: Icon(Icons.photo_camera),
           ),

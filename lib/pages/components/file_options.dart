@@ -65,14 +65,14 @@ class FileOptionsDialog extends StatelessWidget {
                       ],
                     );
                   });
-              if (delete) {
+              if (delete != null && delete) {
                 ws.deleteFile(_fileInfo.path, (response, error) {
                   String msg;
 
                   if (error) {
                     msg = response.msg;
                   } else {
-                    msg = response["response"];
+                    msg = "File deleted";
                   }
 
                   _scaffoldKey.currentState.showSnackBar(SnackBar(
@@ -113,12 +113,12 @@ class FileOptionsDialog extends StatelessWidget {
                   print(_fileInfo.path.replaceFirst(_fileInfo.name, newName));
                   ws.renameFile(_fileInfo.path,
                       _fileInfo.path.replaceFirst(_fileInfo.name, newName),
-                      (response) {
-                    if (response["response"]) {
+                      (response, bool error) {
+                    if (!error && response["response"]) {
                       Navigator.of(context).pop(true);
                     } else {
                       _scaffoldKey.currentState.showSnackBar(SnackBar(
-                        content: Text(response["error"]),
+                        content: Text(error ? response.msg : response["error"]),
                       ));
                     }
                   });
@@ -126,14 +126,10 @@ class FileOptionsDialog extends StatelessWidget {
               }
             },
           ),
-          _fileInfo.isDir
-              ? null
-              : ListTile(
-                  title: Text("Download"),
-                  onTap: () {
-                    _downloadFile(ws, context);
-                  },
-                ),
+          ListTile(
+            title: Text(_fileInfo.isDir ? "Download as ZIP" : "Download"),
+            onTap: () => _downloadFile(ws, context),
+          ),
         ].where((obj) => obj != null).toList(),
       ),
     );

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -18,20 +19,21 @@ class WebSocketProvider {
     "download_file": CmdResponse("download_file"),
     "ls_ps": CmdResponse("ls_ps"),
     "kill_ps": CmdResponse("kill_ps"),
+    "create_dir": CmdResponse("create_dir"),
   };
 
-  WebSocketProvider(String connectionUrl, int port, String pcKey) {
-    connectionUrl = Uri(
-      scheme: "ws",
-      // host: "192.168.0.110",
-      host: "10.0.3.2",
-      port: port,
-      path: '/access/$pcKey',
-    ).toString();
-    // print(connectionUrl);
+  WebSocketProvider(String remoteServer, String pcKey) {
+    // connectionUrl = Uri(
+    //   scheme: "ws",
+    //   host: "192.168.0.110",
+    //   // host: "10.0.3.2",
+    //   port: port,
+    //   path: '/access/$pcKey',
+    // ).toString();
+    // // print(connectionUrl);
     conn = IOWebSocketChannel.connect(
-      connectionUrl,
-      headers: {"X-username": "user1234", "X-password": "password123"},
+      'ws://$remoteServer/access/$pcKey',
+      headers: {"X-username": "user", "X-password": "passwd"},
       pingInterval: Duration(seconds: 10),
     );
 
@@ -159,8 +161,18 @@ class WebSocketProvider {
     cmdResponse.addListener(onData);
     _sendCmdRequest(
       "download_file",
-      [filePath],
+      [filePath, screenshot],
       isStream: true,
+    );
+  }
+
+  takeScreenshot(IOSink ioFile, Function onDone) {
+    downloadFile(
+      "",
+      ioFile,
+      (_) {},
+      onDone,
+      screenshot: true,
     );
   }
 
@@ -178,6 +190,8 @@ class WebSocketProvider {
     cmdResponse.addListener(onDone);
     _sendCmdRequest("kill_ps", [pid]);
   }
+
+  createDirectory(String path) => _sendCmdRequest("create_dir", [path]);
 
   cancelStream() {
     final Map request = {
