@@ -9,6 +9,8 @@ import 'package:remote_pc/pages/components/file_options.dart';
 import 'package:remote_pc/providers/websocket_provider.dart';
 import 'package:remote_pc/utils.dart';
 
+import 'connect_page.dart';
+
 enum SortFilesBy { NAME, SIZE, DIR }
 
 class DirectoryPage extends StatefulWidget {
@@ -93,7 +95,9 @@ class _DirectoryPageState extends State<DirectoryPage>
               return WillPopScope(
                 onWillPop: () async {
                   if (_dirStack.isEmpty) {
-                    return true;
+                    _ws.dispose();
+                    Navigator.of(context).pushReplacement(
+                        MaterialPageRoute(builder: (_) => ConnectPage()));
                   }
 
                   final prevDir = _dirStack.removeLast();
@@ -136,14 +140,6 @@ class _DirectoryPageState extends State<DirectoryPage>
                                       ));
                                     }
                                   } else {
-                                    final msg = canceled
-                                        ? "Download canceled!"
-                                        : "Download completed!";
-                                    _scaffoldKey.currentState.showSnackBar(SnackBar(
-                                      content: Text(msg),
-                                      duration: Duration(seconds: 2),
-                                    ));
-
                                     if (canceled) {
                                       print(
                                           "Download canceled by user... Deleting file");
@@ -326,7 +322,7 @@ class _DirectoryPageState extends State<DirectoryPage>
     final shouldUpdate = await showDialog(
       context: context,
       builder: (context) {
-        return Provider.value(
+        return ChangeNotifierProvider.value(
           value: _ws,
           child: FileOptionsDialog(fileInfo, _scaffoldKey),
         );

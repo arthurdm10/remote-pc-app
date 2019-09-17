@@ -9,8 +9,13 @@ class CmdErrorCode {
   static const InvalidArguments = 0x0B;
 }
 
-class WebSocketProvider {
+enum WsConnectionStatus { unintialized, connecting, connected, error, closed }
+
+class WebSocketProvider extends ChangeNotifier {
   WebSocketChannel conn;
+  WsConnectionStatus _connectionStatus = WsConnectionStatus.unintialized;
+  WsConnectionStatus get connectionStatus => _connectionStatus;
+
   final Map<String, CmdResponse> _cmdResponse = {
     "ls_dir": CmdResponse("ls_dir"),
     "create_file": CmdResponse("create_file"),
@@ -22,7 +27,7 @@ class WebSocketProvider {
     "create_dir": CmdResponse("create_dir"),
   };
 
-  WebSocketProvider(String remoteServer, String pcKey) {
+  WebSocketProvider(Map conncectionData) {
     // connectionUrl = Uri(
     //   scheme: "ws",
     //   host: "192.168.0.110",
@@ -31,26 +36,48 @@ class WebSocketProvider {
     //   path: '/access/$pcKey',
     // ).toString();
     // // print(connectionUrl);
-    conn = IOWebSocketChannel.connect(
-      'ws://$remoteServer/access/$pcKey',
-      headers: {"X-username": "user", "X-password": "passwd"},
-      pingInterval: Duration(seconds: 10),
-    );
+    _connectionStatus = WsConnectionStatus.connecting;
+    WebSocket.connect(
+      'ws://${conncectionData["remote_server"]}/access/${conncectionData["key"]}',
+      headers: {
+        "X-username": conncectionData["username"],
+        "X-password": conncectionData["password"]
+      },
+    ).then((ws) {
+      _connectionStatus = WsConnectionStatus.connected;
+      notifyListeners();
+      ws.pingInterval = Duration(seconds: 2);
+      conn = IOWebSocketChannel(ws);
 
-    conn.stream.listen((data) {
-      if (data is String) {
-        final Map jsonData = jsonDecode(data);
-        // print('receiveid text msg: $jsonData');
-        if (jsonData.containsKey("cmd_response")) {
-          final String cmd = jsonData["cmd_response"];
-          _cmdResponse[cmd].setData(jsonData);
+      conn.stream.listen((data) {
+        if (data is String) {
+          final Map jsonData = jsonDecode(data);
+          // print('receiveid text msg: $jsonData');
+          if (jsonData.containsKey("cmd_response")) {
+            final String cmd = jsonData["cmd_response"];
+            _cmdResponse[cmd].setData(jsonData);
+          }
+        } else if (data is List<int>) {
+          _cmdResponse["download_file"].setData(data);
         }
-      } else if (data is List<int>) {
-        _cmdResponse["download_file"].setData(data);
-      }
-    }).onError((err) {
-      print("Websocket err: ${err.inner}");
+      }, onError: (err) {
+        print("Websocket connection closed: ${err.inner}");
+        _connectionStatus = WsConnectionStatus.error;
+        notifyListeners();
+      }, onDone: () {
+        _connectionStatus = WsConnectionStatus.closed;
+        notifyListeners();
+      });
+    }).catchError((err) {
+      _connectionStatus = WsConnectionStatus.error;
+      notifyListeners();
     });
+  }
+
+  dispose() async {
+    await conn.sink.close();
+    _connectionStatus = WsConnectionStatus.unintialized;
+    super.dispose();
   }
 
   CmdResponse getCmdResponse(String cmd) {
