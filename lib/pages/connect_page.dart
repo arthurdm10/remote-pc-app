@@ -4,15 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:qrcode_reader/qrcode_reader.dart';
 import 'package:remote_pc/providers/websocket_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'components/new_connection_dialog.dart';
 import 'main_page.dart';
 
 class ConnectPage extends StatelessWidget {
-  const ConnectPage({Key key}) : super(key: key);
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         title: Text("Connect"),
         actions: <Widget>[
@@ -23,6 +26,48 @@ class ConnectPage extends StatelessWidget {
             },
           )
         ],
+      ),
+      body: FutureBuilder(
+        future: SharedPreferences.getInstance(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.connectionState == ConnectionState.done) {
+            final SharedPreferences pref = snapshot.data;
+
+            //its a list of json objects
+            final savedPcs = pref.getStringList("pcs");
+            int pcIndex = -1;
+
+            if (savedPcs != null) {
+              return ListView(
+                children: savedPcs.map((String pc) {
+                  final jsonData = jsonDecode(pc);
+                  ++pcIndex;
+
+                  return Dismissible(
+                    key: UniqueKey(),
+                    onDismissed: (_) {
+                      savedPcs.removeAt(pcIndex);
+                      pref.setStringList("pcs", savedPcs);
+                      return true;
+                    },
+                    direction: DismissDirection.endToStart,
+                    child: ListTile(
+                      onTap: () {
+                        _showConnectionDialog(context, jsonData);
+                      },
+                      title: Text(jsonData["key"]),
+                      subtitle: Text('Server ${jsonData["remote_server"]}'),
+                    ),
+                  );
+                }).toList(),
+              );
+            }
+            return Container();
+          }
+        },
       ),
       floatingActionButton: Builder(
         builder: (context) {
@@ -63,10 +108,22 @@ class ConnectPage extends StatelessWidget {
         barrierDismissible: false,
         builder: (context) {
           VoidCallback connect;
-          connect = () {
+          connect = () async {
             if (ws.connectionStatus == WsConnectionStatus.connected) {
               ws.removeListener(connect);
               //close loading dialog
+              if (connectionData["save"]) {
+                final pref = await SharedPreferences.getInstance();
+                final pcs = pref.getStringList("pcs") ?? List<String>();
+
+                pcs.add(jsonEncode({
+                  "remote_server": connectionData["remote_server"],
+                  "key": connectionData["key"]
+                }));
+
+                pref.setStringList("pcs", pcs);
+              }
+
               Navigator.of(context).pop(true);
 
               Navigator.of(context).pushReplacement(
@@ -80,7 +137,6 @@ class ConnectPage extends StatelessWidget {
             } else if (ws.connectionStatus == WsConnectionStatus.error) {
               Navigator.of(context).pop(false);
             }
-            print(ws.connectionStatus);
           };
 
           ws.addListener(connect);
@@ -96,7 +152,7 @@ class ConnectPage extends StatelessWidget {
       );
 
       if (!connected) {
-        Scaffold.of(context).showSnackBar(
+        _scaffoldKey.currentState.showSnackBar(
           SnackBar(
             content: Text("Failed to connect to PC"),
             duration: Duration(seconds: 2),
@@ -104,137 +160,5 @@ class ConnectPage extends StatelessWidget {
         );
       }
     }
-  }
-}
-
-class NewConnectionDialog extends StatefulWidget {
-  Map qrCodeData;
-
-  NewConnectionDialog({Map qrCodeData}) {
-    this.qrCodeData = qrCodeData;
-  }
-
-  @override
-  _NewConnectionDialogState createState() => _NewConnectionDialogState();
-}
-
-class _NewConnectionDialogState extends State<NewConnectionDialog> {
-  String _remoteServer, _pcKey;
-  List<FocusNode> _inputsFocus = [FocusNode(), FocusNode(), FocusNode()];
-
-  final _formGlobalKey = GlobalKey<FormState>();
-
-  final _serverInputController = TextEditingController(),
-      _keyInputController = TextEditingController(),
-      _usernameInputController = TextEditingController(),
-      _passwordInputController = TextEditingController();
-
-  @override
-  void initState() {
-    super.initState();
-
-    if (widget.qrCodeData != null) {
-      _remoteServer = widget.qrCodeData["remote_server"];
-      _pcKey = widget.qrCodeData["key"];
-      _serverInputController.text = _remoteServer;
-      _keyInputController.text = _pcKey;
-    }
-  }
-
-  @override
-  void dispose() {
-    for (final focus in _inputsFocus) {
-      focus.dispose();
-    }
-
-    super.dispose();
-  }
-
-  String _formFieldValidator(String text, {@required String fieldName}) {
-    return text.trim().isEmpty ? 'Invalid $fieldName' : null;
-  }
-
-  _changeFocus(int i) {
-    FocusScope.of(context).requestFocus(_inputsFocus[i]);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text("New connection"),
-      content: SingleChildScrollView(
-        child: Form(
-          key: _formGlobalKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              TextFormField(
-                textInputAction: TextInputAction.next,
-                onEditingComplete: () => _changeFocus(0),
-                validator: (text) =>
-                    _formFieldValidator(text, fieldName: "server address"),
-                controller: _serverInputController,
-                decoration: InputDecoration(
-                  labelText: "Server address",
-                  contentPadding: const EdgeInsets.all(2),
-                ),
-              ),
-              SizedBox(height: 8),
-              TextFormField(
-                focusNode: _inputsFocus[0],
-                onEditingComplete: () => _changeFocus(1),
-                textInputAction: TextInputAction.next,
-                validator: (text) => _formFieldValidator(text, fieldName: "PC key"),
-                controller: _keyInputController,
-                decoration: InputDecoration(
-                  labelText: "PC Key",
-                  contentPadding: const EdgeInsets.all(2),
-                ),
-              ),
-              SizedBox(height: 10),
-              TextFormField(
-                focusNode: _inputsFocus[1],
-                onEditingComplete: () => _changeFocus(2),
-                textInputAction: TextInputAction.next,
-                validator: (text) =>
-                    _formFieldValidator(text, fieldName: "username"),
-                controller: _usernameInputController,
-                decoration: InputDecoration(
-                  labelText: "Username",
-                  contentPadding: const EdgeInsets.all(2),
-                ),
-              ),
-              TextFormField(
-                focusNode: _inputsFocus[2],
-                textInputAction: TextInputAction.done,
-                validator: (text) =>
-                    _formFieldValidator(text, fieldName: "password"),
-                controller: _passwordInputController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: "Password",
-                  contentPadding: const EdgeInsets.all(2),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-      actions: <Widget>[
-        FlatButton(
-          child: Text("Connect"),
-          onPressed: () {
-            if (_formGlobalKey.currentState.validate()) {
-              Navigator.of(context).pop({
-                "remote_server": _serverInputController.text,
-                "key": _keyInputController.text,
-                "username": _usernameInputController.text,
-                "password": _passwordInputController.text
-              });
-            }
-          },
-        )
-      ],
-    );
   }
 }

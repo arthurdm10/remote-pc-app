@@ -23,6 +23,7 @@ dependencies:
   provider:
   crypto:
   convert:
+  shared_preferences:
   open_file: ^2.0.3
   downloads_path_provider: ^0.1.0
   qrcode_reader: ^0.4.4
