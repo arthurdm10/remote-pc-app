@@ -51,172 +51,199 @@ class _ProcessesPageState extends State<ProcessesPage>
       ),
       body: ChangeNotifierProvider(
         builder: (_) => _ws.getCmdResponse("ls_ps"),
-        child: Builder(builder: (context) {
-          return Consumer<CmdResponse>(
-            builder: (context, cmdResponse, _) {
-              if (cmdResponse.status == CmdResponseStatus.LOADING) {
-                return Center(child: CircularProgressIndicator());
-              }
-              final data = cmdResponse.data["response"];
-              final memData = data["memory"];
-              final List procs = data["processes"];
-              procs.sort((p1, p2) {
-                final sortKey = _sortKey[_sortBy];
-                if (_sortBy == SortProcsBy.NAME) {
-                  return p1[sortKey]
-                      .toLowerCase()
-                      .compareTo(p2[sortKey].toLowerCase());
+        child: Builder(
+          builder: (context) {
+            return Consumer<CmdResponse>(
+              builder: (context, cmdResponse, _) {
+                if (cmdResponse.status == CmdResponseStatus.LOADING) {
+                  return Center(child: CircularProgressIndicator());
+                }
+                print(cmdResponse.data);
+                if (cmdResponse.error()) {
+                  cmdResponse.status = CmdResponseStatus.DONE;
+                  Future.delayed(
+                    Duration(milliseconds: 200),
+                    () => showDialog(
+                      context: context,
+                      builder: (context) {
+                        return AlertDialog(
+                          title: Text("Error"),
+                          content: Text(cmdResponse.errorData.msg),
+                        );
+                      },
+                    ),
+                  );
                 }
 
-                return p2[sortKey].compareTo(p1[sortKey]);
-              });
-              int cpuCount = 1;
+                if (cmdResponse.data == null ||
+                    !cmdResponse.data.containsKey("response")) {
+                  return Container(
+                      child: Center(child: Text("Failed to list processes")));
+                }
 
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      "CPU",
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                    ),
-                    SizedBox(height: 8),
-                    GridView.count(
-                      physics: NeverScrollableScrollPhysics(),
-                      crossAxisCount: 3,
-                      shrinkWrap: true,
-                      crossAxisSpacing: 20,
-                      childAspectRatio: 3.5,
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      children: data["cpu"]["percent"].map<Widget>((cpuPercent) {
-                        return Text(
-                          'CPU ${cpuCount++}: $cpuPercent%',
-                        );
-                      }).toList(),
-                    ),
-                    SizedBox(height: 12),
-                    Text(
-                      "RAM",
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
-                    ),
-                    SizedBox(height: 8),
-                    GridView.count(
-                      physics: NeverScrollableScrollPhysics(),
-                      crossAxisCount: 3,
-                      shrinkWrap: true,
-                      crossAxisSpacing: 20,
-                      childAspectRatio: 3.5,
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      children: [
-                        Text(
-                          'Total: ${fileSizeFormated(memData["total"])}',
-                        ),
-                        Text(
-                          'Used: ${fileSizeFormated(memData["used"])} (${memData["percent"]}%)',
-                        ),
-                        Text(
-                          'Free: ${fileSizeFormated(memData["free"])}',
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: 12),
-                    Container(
-                      color: Color(0xff2196f3),
-                      padding:
-                          const EdgeInsets.symmetric(vertical: 8, horizontal: 3),
-                      margin: const EdgeInsets.only(bottom: 5),
-                      child: DefaultTextStyle(
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: GestureDetector(
-                                onTap: () {
-                                  _setSortBy(SortProcsBy.NAME);
-                                },
-                                child: Text("NAME"),
-                              ),
-                            ),
-                            Flexible(
-                              fit: FlexFit.tight,
-                              child: GestureDetector(
-                                onTap: () {
-                                  _setSortBy(SortProcsBy.CPU);
-                                },
-                                child: Text("CPU"),
-                              ),
-                            ),
-                            Flexible(
-                              fit: FlexFit.loose,
-                              child: GestureDetector(
-                                onTap: () {
-                                  _setSortBy(SortProcsBy.RAM);
-                                },
-                                child: Text("RAM"),
-                              ),
-                            ),
-                          ],
-                        ),
+                final data = cmdResponse.data["response"];
+                final memData = data["memory"];
+                final List procs = data["processes"];
+
+                procs.sort((p1, p2) {
+                  final sortKey = _sortKey[_sortBy];
+                  if (_sortBy == SortProcsBy.NAME) {
+                    return p1[sortKey]
+                        .toLowerCase()
+                        .compareTo(p2[sortKey].toLowerCase());
+                  }
+
+                  return p2[sortKey].compareTo(p1[sortKey]);
+                });
+                int cpuCount = 1;
+
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        "CPU",
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                       ),
-                    ),
-                    Expanded(
-                      child: RefreshIndicator(
-                        onRefresh: () async {
-                          _ws.listProcesses();
-                          return true;
-                        },
-                        child: ListView(
-                          shrinkWrap: true,
-                          primary: true,
-                          padding: const EdgeInsets.symmetric(horizontal: 5),
-                          children: procs.map((proc) {
-                            return InkWell(
-                              onTap: () {
-                                showDialog(
-                                    context: context,
-                                    builder: (_) => ProcessOptions(
-                                        proc["name"], proc["pid"], _ws));
-                              },
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 3,
-                                  horizontal: 2,
-                                ),
-                                child: Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Expanded(child: Text(proc["name"])),
-                                    Flexible(
-                                      fit: FlexFit.tight,
-                                      child: Text(
-                                        '${proc["cpu_percent"].toStringAsFixed(2)}%',
-                                      ),
-                                    ),
-                                    Flexible(
-                                      fit: FlexFit.loose,
-                                      child: Text(
-                                        '${proc["memory_percent"].toStringAsFixed(2)}%',
-                                      ),
-                                    ),
-                                  ],
+                      SizedBox(height: 8),
+                      GridView.count(
+                        physics: NeverScrollableScrollPhysics(),
+                        crossAxisCount: 3,
+                        shrinkWrap: true,
+                        crossAxisSpacing: 20,
+                        childAspectRatio: 3.5,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        children: data["cpu"]["percent"].map<Widget>((cpuPercent) {
+                          return Text(
+                            'CPU ${cpuCount++}: $cpuPercent%',
+                          );
+                        }).toList(),
+                      ),
+                      SizedBox(height: 12),
+                      Text(
+                        "RAM",
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                      ),
+                      SizedBox(height: 8),
+                      GridView.count(
+                        physics: NeverScrollableScrollPhysics(),
+                        crossAxisCount: 3,
+                        shrinkWrap: true,
+                        crossAxisSpacing: 20,
+                        childAspectRatio: 3.5,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        children: [
+                          Text(
+                            'Total: ${fileSizeFormated(memData["total"])}',
+                          ),
+                          Text(
+                            'Used: ${fileSizeFormated(memData["used"])} (${memData["percent"]}%)',
+                          ),
+                          Text(
+                            'Free: ${fileSizeFormated(memData["free"])}',
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 12),
+                      Container(
+                        color: Color(0xff2196f3),
+                        padding:
+                            const EdgeInsets.symmetric(vertical: 8, horizontal: 3),
+                        margin: const EdgeInsets.only(bottom: 5),
+                        child: DefaultTextStyle(
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: GestureDetector(
+                                  onTap: () {
+                                    _setSortBy(SortProcsBy.NAME);
+                                  },
+                                  child: Text("NAME"),
                                 ),
                               ),
-                            );
-                          }).toList(),
+                              Flexible(
+                                fit: FlexFit.tight,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    _setSortBy(SortProcsBy.CPU);
+                                  },
+                                  child: Text("CPU"),
+                                ),
+                              ),
+                              Flexible(
+                                fit: FlexFit.loose,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    _setSortBy(SortProcsBy.RAM);
+                                  },
+                                  child: Text("RAM"),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    )
-                  ],
-                ),
-              );
-            },
-          );
-        }),
+                      Expanded(
+                        child: RefreshIndicator(
+                          onRefresh: () async {
+                            _ws.listProcesses();
+                            return true;
+                          },
+                          child: ListView(
+                            shrinkWrap: true,
+                            primary: true,
+                            padding: const EdgeInsets.symmetric(horizontal: 5),
+                            children: procs.map((proc) {
+                              return InkWell(
+                                onTap: () {
+                                  showDialog(
+                                      context: context,
+                                      builder: (_) => ProcessOptions(
+                                          proc["name"], proc["pid"], _ws));
+                                },
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 3,
+                                    horizontal: 2,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(child: Text(proc["name"])),
+                                      Flexible(
+                                        fit: FlexFit.tight,
+                                        child: Text(
+                                          '${proc["cpu_percent"].toStringAsFixed(2)}%',
+                                        ),
+                                      ),
+                                      Flexible(
+                                        fit: FlexFit.loose,
+                                        child: Text(
+                                          '${proc["memory_percent"].toStringAsFixed(2)}%',
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+                      )
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }

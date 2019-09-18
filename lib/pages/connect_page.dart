@@ -12,87 +12,98 @@ class ConnectPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      home: Scaffold(
-        appBar: AppBar(
-          title: Text("Connect"),
-        ),
-        floatingActionButton: Builder(
-          builder: (context) {
-            //here we use a builder so we can access the scaffold and show a snackbar
-            return FloatingActionButton(
-              onPressed: () async {
-                // final codeData = await QRCodeReader()
-                //     .setAutoFocusIntervalInMs(200) // default 5000
-                //     .setForceAutoFocus(true) // default false
-                //     .setTorchEnabled(true) // default false
-                //     .setHandlePermissions(true) // default true
-                //     .setExecuteAfterPermissionGranted(true) // default true
-                //     .scan();
+    return Scaffold(
+      appBar: AppBar(
+        title: Text("Connect"),
+        actions: <Widget>[
+          IconButton(
+            icon: Icon(Icons.desktop_windows),
+            onPressed: () {
+              _showConnectionDialog(context);
+            },
+          )
+        ],
+      ),
+      floatingActionButton: Builder(
+        builder: (context) {
+          //here we use a builder so we can access the scaffold and show a snackbar
+          return FloatingActionButton(
+            onPressed: () async {
+              final codeData = await QRCodeReader()
+                  .setAutoFocusIntervalInMs(200) // default 5000
+                  .setForceAutoFocus(true) // default false
+                  .setTorchEnabled(true) // default false
+                  .setHandlePermissions(true) // default true
+                  .setExecuteAfterPermissionGranted(true) // default true
+                  .scan();
 
-                // if (codeData == null || codeData.isEmpty) {
-                //   return;
-                // }
-
-                final Map connectionData = await showDialog(
-                  context: context,
-                  builder: (_) => NewConnectionDialog(qrCodeData: jsonDecode("{}")),
-                );
-
-                if (connectionData != null) {
-                  final ws = WebSocketProvider(connectionData);
-
-                  final connected = await showDialog(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (context) {
-                      VoidCallback connect;
-                      connect = () {
-                        if (ws.connectionStatus == WsConnectionStatus.connected) {
-                          //close loading dialog
-                          ws.removeListener(connect);
-                          Navigator.of(context).pop(true);
-                          Navigator.of(context).pushReplacement(
-                            MaterialPageRoute(
-                              builder: (_) => ChangeNotifierProvider(
-                                builder: (_) => ws.getCmdResponse("initial_dir"),
-                                child: MainPage(ws),
-                              ),
-                            ),
-                          );
-                        } else if (ws.connectionStatus == WsConnectionStatus.error) {
-                          Navigator.of(context).pop(false);
-                        }
-                      };
-
-                      ws.addListener(connect);
-
-                      return Container(
-                        width: 300,
-                        height: 350,
-                        child: Center(
-                          child: CircularProgressIndicator(),
-                        ),
-                      );
-                    },
-                  );
-
-                  if (!connected) {
-                    Scaffold.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text("Failed to connect to PC"),
-                        duration: Duration(seconds: 2),
-                      ),
-                    );
-                  }
-                }
-              },
-              child: Icon(Icons.photo_camera),
-            );
-          },
-        ),
+              if (codeData == null || codeData.isEmpty) {
+                return;
+              }
+              _showConnectionDialog(jsonDecode(codeData));
+            },
+            child: Icon(Icons.photo_camera),
+          );
+        },
       ),
     );
+  }
+
+  _showConnectionDialog(BuildContext context, [Map qrCodeData]) async {
+    final Map connectionData = await showDialog(
+      context: context,
+      builder: (_) => NewConnectionDialog(qrCodeData: qrCodeData),
+    );
+
+    if (connectionData != null) {
+      final ws = WebSocketProvider(connectionData);
+
+      final connected = await showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          VoidCallback connect;
+          connect = () {
+            if (ws.connectionStatus == WsConnectionStatus.connected) {
+              ws.removeListener(connect);
+              //close loading dialog
+              Navigator.of(context).pop(true);
+
+              Navigator.of(context).pushReplacement(
+                MaterialPageRoute(
+                  builder: (_) => ChangeNotifierProvider(
+                    builder: (_) => ws.getCmdResponse("initial_dir"),
+                    child: MainPage(ws),
+                  ),
+                ),
+              );
+            } else if (ws.connectionStatus == WsConnectionStatus.error) {
+              Navigator.of(context).pop(false);
+            }
+            print(ws.connectionStatus);
+          };
+
+          ws.addListener(connect);
+
+          return Container(
+            width: 300,
+            height: 350,
+            child: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        },
+      );
+
+      if (!connected) {
+        Scaffold.of(context).showSnackBar(
+          SnackBar(
+            content: Text("Failed to connect to PC"),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    }
   }
 }
 
@@ -100,8 +111,7 @@ class NewConnectionDialog extends StatefulWidget {
   Map qrCodeData;
 
   NewConnectionDialog({Map qrCodeData}) {
-    // this.qrCodeData = qrCodeData;
-    this.qrCodeData = {"remote_server": "10.0.3.2:9002", "key": "key123"};
+    this.qrCodeData = qrCodeData;
   }
 
   @override
@@ -116,8 +126,8 @@ class _NewConnectionDialogState extends State<NewConnectionDialog> {
 
   final _serverInputController = TextEditingController(),
       _keyInputController = TextEditingController(),
-      _usernameInputController = TextEditingController(text: "user"),
-      _passwordInputController = TextEditingController(text: "passwd");
+      _usernameInputController = TextEditingController(),
+      _passwordInputController = TextEditingController();
 
   @override
   void initState() {

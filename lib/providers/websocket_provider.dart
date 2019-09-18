@@ -50,7 +50,6 @@ class WebSocketProvider extends ChangeNotifier {
       conn.stream.listen((data) {
         if (data is String) {
           final Map jsonData = jsonDecode(data);
-          // print('receiveid text msg: $jsonData');
           if (jsonData.containsKey("cmd_response")) {
             final String cmd = jsonData["cmd_response"];
             _cmdResponse[cmd].setData(jsonData);
@@ -175,7 +174,6 @@ class WebSocketProvider extends ChangeNotifier {
         } else {
           // TODO: VERIFY HASH
 
-          // was the download canceled?
           final canceled = data.containsKey("canceled");
 
           cmdResponse.removeListener(onData);
@@ -244,7 +242,7 @@ class CmdResponse<T> extends ChangeNotifier {
 
   CmdResponseStatus status = CmdResponseStatus.UNINTIALIZED;
 
-  setData(T data, [bool notify = true]) {
+  setData(T data) {
     if (data is Map) {
       if (data.containsKey("error_msg") && data.containsKey("error_code")) {
         _error = CommandError.fromJson(data);
@@ -256,9 +254,7 @@ class CmdResponse<T> extends ChangeNotifier {
     _data = data;
     status = CmdResponseStatus.DONE;
 
-    if (notify) {
-      notifyListeners();
-    }
+    notifyListeners();
   }
 }
 

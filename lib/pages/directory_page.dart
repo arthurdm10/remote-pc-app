@@ -112,51 +112,6 @@ class _DirectoryPageState extends State<DirectoryPage>
                   appBar: AppBar(
                     title: Text(_dir),
                     actions: <Widget>[
-                      IconButton(
-                        icon: Icon(Icons.photo_size_select_small),
-                        tooltip: "Take a screenshot",
-                        onPressed: () async {
-                          final downloadsPath =
-                              await DownloadsPathProvider.downloadsDirectory;
-                          final fileName = '${downloadsPath.path}/screenshot.jpeg';
-                          final file = File(fileName);
-                          final ioFile = file.openWrite();
-
-                          showDialog(
-                              context: context,
-                              barrierDismissible: false,
-                              builder: (context) {
-                                _ws.takeScreenshot(ioFile, (canceled, error) async {
-                                  await ioFile.flush();
-                                  await ioFile.close();
-                                  Navigator.of(context).pop();
-
-                                  if (!canceled) {
-                                    final result = await OpenFile.open(fileName);
-                                    if (result != "done") {
-                                      _scaffoldKey.currentState
-                                          .showSnackBar(SnackBar(
-                                        content: Text(result),
-                                      ));
-                                    }
-                                  } else {
-                                    if (canceled) {
-                                      print(
-                                          "Download canceled by user... Deleting file");
-                                      file.deleteSync();
-                                    }
-                                  }
-                                });
-                                return Container(
-                                  width: 300,
-                                  height: 350,
-                                  child: Center(
-                                    child: CircularProgressIndicator(),
-                                  ),
-                                );
-                              });
-                        },
-                      ),
                       PopupMenuButton<SortFilesBy>(
                         onSelected: (SortFilesBy result) {
                           setState(() {
@@ -199,6 +154,56 @@ class _DirectoryPageState extends State<DirectoryPage>
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: <Widget>[
+                          IconButton(
+                            icon: Icon(
+                              Icons.photo_size_select_small,
+                              color: Colors.blue,
+                            ),
+                            tooltip: "Take a screenshot",
+                            onPressed: () async {
+                              final downloadsPath =
+                                  await DownloadsPathProvider.downloadsDirectory;
+                              final fileName =
+                                  '${downloadsPath.path}/screenshot.jpeg';
+                              final file = File(fileName);
+                              final ioFile = file.openWrite();
+
+                              showDialog(
+                                  context: context,
+                                  barrierDismissible: false,
+                                  builder: (context) {
+                                    _ws.takeScreenshot(ioFile,
+                                        (canceled, error) async {
+                                      await ioFile.flush();
+                                      await ioFile.close();
+                                      Navigator.of(context).pop();
+
+                                      if (!canceled) {
+                                        final result = await OpenFile.open(fileName);
+                                        if (result != "done") {
+                                          _scaffoldKey.currentState
+                                              .showSnackBar(SnackBar(
+                                            content: Text(result),
+                                          ));
+                                        }
+                                      } else {
+                                        if (canceled) {
+                                          print(
+                                              "Download canceled by user... Deleting file");
+                                          file.deleteSync();
+                                        }
+                                      }
+                                    });
+                                    return Container(
+                                      width: 300,
+                                      height: 350,
+                                      child: Center(
+                                        child: CircularProgressIndicator(),
+                                      ),
+                                    );
+                                  });
+                            },
+                          ),
                           IconButton(
                             icon: Icon(Icons.create_new_folder, color: Colors.blue),
                             tooltip: "Create new directory",
@@ -354,7 +359,7 @@ class _DirectoryPageState extends State<DirectoryPage>
           }
           break;
         default:
-          return f1["name"].compareTo(f2["name"]);
+          return f1["name"].toLowerCase().compareTo(f2["name"].toLowerCase());
       }
     });
     return files;
