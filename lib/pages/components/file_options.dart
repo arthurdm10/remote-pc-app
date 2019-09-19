@@ -72,7 +72,7 @@ class FileOptionsDialog extends StatelessWidget {
                   if (error) {
                     msg = response.msg;
                   } else {
-                    msg = "File deleted";
+                    msg = (_fileInfo.isDir ? "Directory" : "File") + " deleted";
                   }
 
                   _scaffoldKey.currentState.showSnackBar(SnackBar(

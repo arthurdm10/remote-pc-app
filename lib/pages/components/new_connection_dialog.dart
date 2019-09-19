@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:crypto/crypto.dart';
 
 class NewConnectionDialog extends StatefulWidget {
   Map qrCodeData;
@@ -135,8 +138,10 @@ class _NewConnectionDialogState extends State<NewConnectionDialog> {
               Navigator.of(context).pop({
                 "remote_server": _serverInputController.text,
                 "key": _keyInputController.text,
-                "username": _usernameInputController.text,
-                "password": _passwordInputController.text,
+                "username":
+                    sha256.convert(utf8.encode(_usernameInputController.text)),
+                "password":
+                    sha256.convert(utf8.encode(_passwordInputController.text)),
                 "save": _saveConnection,
               });
             }
