@@ -1,9 +1,8 @@
-App para acesso remoto a um PC
+App para acessar um PC remotamente
 
 Comandos disponiveis
 
-- Listar de arquivos
-- Baixar/abrir arquivos
+- Listar, baixar, abrir e enviar arquivos
 - Baixar diretorios compactados
 - Criar diretorio
 - Deletar e renomear arquivos e diretorios
